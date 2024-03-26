@@ -57,11 +57,24 @@ class BlockOutputWrapper(torch.nn.Module):
 
 class Llama7BHelper:
     def __init__(self, token):
+        unquantized_path = "meta-llama/Llama-2-7b-hf"
+        quantized_path = "TheBloke/Llama-2-7b-Chat-GPTQ"
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf", use_auth_token=token)
-        self.model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf", use_auth_token=token).to(self.device)
+        
+        ### unquantized model
+        # print("setting device to be cpu")
+        # self.device = "cpu"
+        # self.tokenizer = AutoTokenizer.from_pretrained(quantized_path, use_auth_token=token)
+        # self.model = AutoModelForCausalLM.from_pretrained(quantized_path, use_auth_token=token).to(self.device)
+
+        ### quantized model
+        self.tokenizer = AutoTokenizer.from_pretrained(quantized_path, use_fast=True)
+        self.model = AutoModelForCausalLM.from_pretrained(quantized_path, device_map="auto", trust_remote_code=False, revision="main")
+        # self.model.to("cuda")
+        print(f"model on cuda: {next(self.model.parameters()).is_cuda}")
         for i, layer in enumerate(self.model.model.layers):
             self.model.model.layers[i] = BlockOutputWrapper(layer, self.model.lm_head, self.model.model.norm)
+        
 
     def generate_text(self, prompt, max_length=100):
         inputs = self.tokenizer(prompt, return_tensors="pt")
@@ -84,9 +97,9 @@ class Llama7BHelper:
         for layer in self.model.model.layers:
             layer.reset()
 
-    def print_decoded_activations(self, decoded_activations, label, topk=10):
+    def print_decoded_activations(self, decoded_activations, label):
         softmaxed = torch.nn.functional.softmax(decoded_activations[0][-1], dim=-1)
-        values, indices = torch.topk(softmaxed, topk)
+        values, indices = torch.topk(softmaxed, 10)
         probs_percent = [int(v * 100) for v in values.tolist()]
         tokens = self.tokenizer.batch_decode(indices.unsqueeze(-1))
         print(label, list(zip(tokens, probs_percent)))
@@ -97,10 +110,10 @@ class Llama7BHelper:
         for i, layer in enumerate(self.model.model.layers):
             print(f'Layer {i}: Decoded intermediate outputs')
             if print_attn_mech:
-                self.print_decoded_activations(layer.attn_mech_output_unembedded, 'Attention mechanism', topk=topk)
+                self.print_decoded_activations(layer.attn_mech_output_unembedded, 'Attention mechanism')
             if print_intermediate_res:
-                self.print_decoded_activations(layer.intermediate_res_unembedded, 'Intermediate residual stream', topk=topk)
+                self.print_decoded_activations(layer.intermediate_res_unembedded, 'Intermediate residual stream')
             if print_mlp:
-                self.print_decoded_activations(layer.mlp_output_unembedded, 'MLP output', topk=topk)
+                self.print_decoded_activations(layer.mlp_output_unembedded, 'MLP output')
             if print_block:
-                self.print_decoded_activations(layer.block_output_unembedded, 'Block output', topk=topk)
+                self.print_decoded_activations(layer.block_output_unembedded, 'Block output')
