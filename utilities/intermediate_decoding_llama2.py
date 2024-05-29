@@ -76,9 +76,10 @@ class Llama7BHelper:
             self.model.model.layers[i] = BlockOutputWrapper(layer, self.model.lm_head, self.model.model.norm)
         
 
-    def generate_text(self, prompt, max_length=100):
+    def generate_text(self, prompt, max_length=None, max_new_tokens=None):
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        generate_ids = self.model.generate(inputs.input_ids.to(self.device), max_length=max_length)
+        if max_length is not None: generate_ids = self.model.generate(inputs.input_ids.to(self.device), max_length=max_length)
+        else: generate_ids = self.model.generate(inputs.input_ids.to(self.device), max_new_tokens=max_new_tokens)
         return self.tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
 
     def get_logits(self, prompt):
@@ -117,3 +118,9 @@ class Llama7BHelper:
                 self.print_decoded_activations(layer.mlp_output_unembedded, 'MLP output')
             if print_block:
                 self.print_decoded_activations(layer.block_output_unembedded, 'Block output')
+            print("\n")
+
+    def count_new_tokens(self, prompt, generated_text):
+        prompt_tokens = self.tokenizer.tokenize(prompt)
+        generated_tokens = self.tokenizer.tokenize(generated_text)
+        return len(generated_tokens) - len(prompt_tokens)
