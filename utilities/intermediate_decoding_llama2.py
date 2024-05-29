@@ -1,5 +1,11 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+# from transformers import AutoTokenizer, AutoModelForCausalLM
+from ltc.ltc.src.transformers.models.auto.modeling_auto import AutoModelForCausalLM
+# from ltc.ltc.src.transformers.models.auto.modeling_auto import AutoTokenizer
+from ltc.ltc.src.transformers.models.auto.tokenization_auto import AutoTokenizer
+# from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+# from ltc.ltc.src.transformers.models.auto
+
 
 class AttnWrapper(torch.nn.Module):
     def __init__(self, attn):
@@ -60,6 +66,8 @@ class Llama7BHelper:
         unquantized_path = "meta-llama/Llama-2-7b-hf"
         quantized_path = "TheBloke/Llama-2-7b-Chat-GPTQ"
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda"
+        print(self.device)
         
         ### unquantized model
         # print("setting device to be cpu")
@@ -70,7 +78,7 @@ class Llama7BHelper:
         ### quantized model
         self.tokenizer = AutoTokenizer.from_pretrained(quantized_path, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(quantized_path, device_map="auto", trust_remote_code=False, revision="main")
-        # self.model.to("cuda")
+        self.model.to("cuda")
         print(f"model on cuda: {next(self.model.parameters()).is_cuda}")
         for i, layer in enumerate(self.model.model.layers):
             self.model.model.layers[i] = BlockOutputWrapper(layer, self.model.lm_head, self.model.model.norm)
